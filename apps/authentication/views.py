@@ -2,17 +2,20 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.exceptions import Throttled
+from rest_framework.exceptions import Throttled, NotFound
+from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth import logout
+from django.core.cache import cache
 from .serializers import (
     AccountSerializer,
     LoginSerializer,
     SignupSerializer,
     AccountVerificationSerializer
 )
-from rest_framework.permissions import IsAuthenticated
-from django.contrib.auth import logout
-from django.core.cache import cache
 from .tasks import send_verification_email
+from apps.payments.models import ShippingAddress
+from apps.payments.serializers import ShippingAddressSerializer
+
 
 class AccountView(APIView):
     permission_classes = [IsAuthenticated]
@@ -31,6 +34,63 @@ class AccountVerificationView(APIView):
                 print(serializer.data)
                 return Response({'detail': 'Su cuenta se ha creado correctamente. Inicie sesión para continuar.'}, status=status.HTTP_200_OK)
         return Response({'detail': 'Codigo introducido incorrecto.'}, status=status.HTTP_400_BAD_REQUEST)
+
+class ShippingAddressListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        data = ShippingAddress.objects.filter(user=request.user)
+        serializer = ShippingAddressSerializer(data, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class ShippingAddressView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, id, user):
+        try:
+            return ShippingAddress.objects.get(id=id, user=user)
+        except ShippingAddress.DoesNotExist:
+            raise NotFound(detail='La direccion de envio no existe.')
+    
+    def get(self, request, id):
+        data = self.get_object(id, user=request.user)
+        serializer = ShippingAddressSerializer(data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, id):
+        data = self.get_object(id, user=request.user)
+        serializer = ShippingAddressSerializer(data, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'detail': 'Direccion actualizada.'
+                }, status=status.HTTP_200_OK
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, id):
+        data = self.get_object(id, user=request.user)
+        data.delete()
+        return Response({
+            'detail': 'Direccion eliminada.'
+            }, status=status.HTTP_200_OK
+        )
+
+class ShippingAddressCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ShippingAddressSerializer(
+            data=request.data, 
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'detail': 'Direccion agregada exitosamente.'
+                }, status=status.HTTP_200_OK
+            )
+        return Response(serializer.data, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(APIView):
     def post(self, request):
