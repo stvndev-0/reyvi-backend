@@ -10,3 +10,9 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 
 app.autodiscover_tasks()
 
+app.conf.beat_schedule = {
+    'eliminar-usuarios-no-verificados': {
+        'task': 'authentication.task.account_not_verify',
+        'schedule': 600.0,  # Cada 10 minutos
+    },
+}
