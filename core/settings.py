@@ -34,6 +34,7 @@ DJANGO_APPS = [
 
 PROJECT_APPS = [
     'apps.authentication',
+    'apps.store',
 ]
 
 THIRD_PARTY_APPS = [
